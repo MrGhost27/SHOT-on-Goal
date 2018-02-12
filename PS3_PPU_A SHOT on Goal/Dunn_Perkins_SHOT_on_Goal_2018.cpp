@@ -107,13 +107,48 @@ const int maxDataPoints = (int)((maxDistanceToGoal + 2.0F) / deltaD);	// =104, c
 
 float flightPath[104 + 1][2];			// x,y coords (m,m) of ball flight. The sequence terminates with 'dataEnd' if fewer than maxDataPoints used.
 
+///////////////////////////////////////////////////////
+
+// Lookup table for Tan values between 18 degrees and 23 degrees in 0.5 degree increments
+float tanTable[] = {
+	0.32492,
+	0.334595,
+	0.344328,
+	0.354119,
+	0.36397,
+	0.373885,
+	0.383864,
+	0.39391,
+	0.404026,
+	0.414214,
+	0.424475
+};
+
+// Lookup table for Cos values between 18 degrees and 23 degrees in 0.5 degree increments
+float cosTable[] = {
+	0.951057,
+	0.948324,
+	0.945519,
+	0.942641,
+	0.939693,
+	0.936672,
+	0.93358,
+	0.930418,
+	0.927184,
+	0.92388,
+	0.920505
+};
+
+
+///////////////////////////////////////////////////////
+
 //************************************* MAIN ***********************************************************************
 int main(void)
 {
 	bool foundCombo(false);
 
-	getDistanceToKick(&distanceToGoal);	// comment this out if required
-	//distanceToGoal = 12.0F;  //***SHOT use this rather than entering it each run!
+	//getDistanceToKick(&distanceToGoal);	// comment this out if required
+	distanceToGoal = 12.0F;  //***SHOT use this rather than entering it each run!
 
 	cout << "\nYou entered " << distanceToGoal << " metres. Looking for solution for kick speed and angle...";
 	fflush(stdout);	//PS3 console fix
@@ -158,7 +193,7 @@ int main(void)
 			//*********************************************************************************************************
 #ifdef _PS3
 			stop = get_time_in_ticks();			//*** PS3 Time Base register returns a tick count
-			if ((stop - start) < GenerateFlightPathTime) GenerateFlightPathTime = (stop - start); 
+			if ((stop - start) < GenerateFlightPathTime) GenerateFlightPathTime = (stop - start);
 #else
 			timer.stopTimer();					//*** x86 timers return time in Seconds, so scale to microseconds
 			if (timer.getElapsedTime() < GenerateFlightPathTime) GenerateFlightPathTime = (timer.getElapsedTime() * micro);	//*** x86 record fastest time
@@ -195,13 +230,16 @@ bool findSHOTonGoalSpeedAndAngle(float* speed, float* angle, float x)
 	float nextSpeed;
 	float nextAngle(minAngle);	// Start with shallowest angle...
 	float height;
+	int tableIndex(0);			// Used for the cos and tan lookup table
 
 	bool foundCombo(false);		// Found combination of speed and angle that gets ball over bar?
 
 	while (!foundCombo && !(nextAngle > maxAngle))				// Think de Morgan's Theory, perhaps.
 	{
-		float AngleRads = (nextAngle * (Pi / 180.0F));			// Need radians for cos and tan functions
+		//float AngleRads = (nextAngle * (Pi / 180.0F));			// Need radians for cos and tan functions
+		// sod working this out. look at the table index.
 		nextSpeed = minSpeed;									// reset minimum speed 
+		// This is a speed thing
 
 		while (!foundCombo && !(nextSpeed > maxSpeed))
 		{
@@ -212,8 +250,66 @@ bool findSHOTonGoalSpeedAndAngle(float* speed, float* angle, float x)
 			// If this is > cross bar height (plus any margin allowed) then result! 
 			// Note: height could become negative if ball hits ground short of posts (and theoretically keeps going underground!).
 			// Note: Max horizontal distance can be calculated from = (speed^2) * sin(2*angle)/g
+#ifdef _PS3 
+			//height = ((-g * x*x) / (2.0F *cos(AngleRads) *cos(AngleRads) * (nextSpeed*nextSpeed))) + (x *tan(AngleRads));	//Phew!
+			height = ((-g * x*x) / (2.0F * cosTable[tableIndex] * cosTable[tableIndex] * (nextSpeed*nextSpeed))) + (x * tanTable[tableIndex]);	//Phew!
+#else
+			// Constants - Putting them into specified regsiters?
+			// AngleRads in F5
+			// nextSpeed in F6
+			// Gravity (g) in F7 0x9.81
 
-			height = ((-g * x*x) / (2.0F *cos(AngleRads) *cos(AngleRads) * (nextSpeed*nextSpeed))) + (x *tan(AngleRads));	//Phew!
+			float newgravity = g;
+
+			asm volatile(
+
+				"lfs 5, %[AngleRads]                      \n"
+				"lfs 6, %[nextSpeed]                      \n"
+				"lfs 7, %[g]                      \n"
+				"                      \n"
+				"                      \n"
+				"                      \n"
+				"                      \n"
+
+				/*
+				00011AB4 8122829C lwz        r9,-0x7D64(r2)                 PIPE
+				00011AB8 C0090000 lfs        f0,0x0(r9)                    03 (00011AB4) REG LSU
+				00011ABC FDA00050 fneg       f13,f0                         PIPE
+				00011AC0 C01F0110 lfs        f0,0x110(r31)
+				00011AC4 EDAD0032 fmuls      f13,f13,f0                    08 (00011ABC) REG PIPE
+				00011AC8 C01F0110 lfs        f0,0x110(r31)
+				00011ACC EFCD0032 fmuls      f30,f13,f0                    08 (00011AC4) REG PIPE
+				00011AD0 C03F0070 lfs        f1,0x70(r31)
+				00011AD4 4803A541 bl         std::cos(float)               08
+				00011AD8 60000000 nop
+				00011ADC FC000890 fmr        f0,f1
+				00011AE0 EFE0002A fadds      f31,f0,f0                     09 (00011ADC) REG
+				00011AE4 C03F0070 lfs        f1,0x70(r31)
+				00011AE8 4803A52D bl         std::cos(float)               08
+				00011AEC 60000000 nop                                       PIPE
+				00011AF0 FC000890 fmr        f0,f1
+				00011AF4 ED9F0032 fmuls      f12,f31,f0                    09 (00011AF0) REG PIPE
+				00011AF8 C1BF0080 lfs        f13,0x80(r31)
+				00011AFC C01F0080 lfs        f0,0x80(r31)                   PIPE
+				00011B00 EC0D0032 fmuls      f0,f13,f0
+				00011B04 EC0C0032 fmuls      f0,f12,f0                     09 (00011B00) REG PIPE
+				00011B08 EFFE0024 fdivs      f31,f30,f0                    56+09 (00011B04) REG
+				00011B0C C03F0070 lfs        f1,0x70(r31)                   PIPE
+				00011B10 4803A54D bl         std::tan(float)               08
+				00011B14 60000000 nop                                       PIPE
+				00011B18 FDA00890 fmr        f13,f1
+				00011B1C C01F0110 lfs        f0,0x110(r31)
+				00011B20 EC0D0032 fmuls      f0,f13,f0                     09 (00011B18) REG
+				00011B24 EC1F002A fadds      f0,f31,f0                     09 (00011B20) REG PIPE
+				00011B28 D01F0078 stfs       f0,0x78(r31)                  09 (00011B24) REG
+				*/
+				:		// Output
+			:	[AngleRads] "m" (AngleRads),	// Input
+				[nextSpeed] "m" (nextSpeed),
+				[g] "m" (newgravity)
+				:	"fr5", "fr6", "fr7"		// Clobber List
+				);
+#endif
 
 #ifdef _longTrace  // Echo results to screen as calculations proceed (can be lengthy, be patient! Very patient.)
 			cout << setw(4) << setprecision(4) << "\nHeight found for speed " << nextSpeed << "m/s\t\t= " << height << " m,\t\tkicking at angle " << nextAngle << " degrees";
@@ -227,6 +323,7 @@ bool findSHOTonGoalSpeedAndAngle(float* speed, float* angle, float x)
 			}
 			else nextSpeed += deltaD;		// Otherwise try next speed up (+0.5 m/s).
 		}
+		tableIndex++;
 		nextAngle += deltaD;	// no joy, try next angle up (+0.5 degrees).
 	}
 	return (foundCombo);
@@ -275,7 +372,7 @@ void generateFlightPath(float speed, float angle)
 void showFlightPathResults(float speed, float angle, float distanceToGoal)
 {
 	string YaxisTitle1 = "\n\n Height (m) above pitch\n in 0.25m increments\t\t\t\t\t\tSHOT ON GOAL CALCULATOR ";
-	string YaxisTitle2 =                            "\n (Vert. exag.~= x5) \t\t\t\t\t\t~~~~~~~~~~~~~~~~~~~~~~~\n\n";
+	string YaxisTitle2 = "\n (Vert. exag.~= x5) \t\t\t\t\t\t~~~~~~~~~~~~~~~~~~~~~~~\n\n";
 	string XaxisTitle1 = "\n\t\t\t\tDistance (m) to ";
 	string XaxisTitle2 = "'s goal in 0.5m increments\n\n";
 	string goalPostTitle = "+ = cross bar";
@@ -382,7 +479,7 @@ void showFlightPathResults(float speed, float angle, float distanceToGoal)
 		else {
 			graphDisplay[tempY][tempX] = 'x';					//***SHOT Y value is incorrect, plot as 'x'...
 			graphDisplay[actualPoints[i][y]][tempX] = ball;		//***SHOT ...and plot correct one.
-			good=false;											//***SHOT Not good!
+			good = false;											//***SHOT Not good!
 		};
 	}//***SHOT produce a speech bubble...
 	if (good) graphDisplay[28].replace(7, 11, "LOOKS GOOD!");
@@ -402,7 +499,7 @@ void showFlightPathResults(float speed, float angle, float distanceToGoal)
 
 	// Produce the finished graph on the console...
 	cout << YaxisTitle1 << '(' << yourName << ')' << YaxisTitle2;
-	for (int i(0); i<graphLines; ++i) cout << graphDisplay[i];	// display the big picture...
+	for (int i(0); i < graphLines; ++i) cout << graphDisplay[i];	// display the big picture...
 
 	// Output enough spaces to get goal post title to correct position, aligning the '+' with the post...
 	for (int i(0); i < GoalPostXpos; i++) cout << SPACE; cout << goalPostTitle;

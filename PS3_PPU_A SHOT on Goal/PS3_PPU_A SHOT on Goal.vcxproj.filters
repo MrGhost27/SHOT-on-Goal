@@ -9,12 +9,15 @@
       <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
       <Extensions>h;hpp</Extensions>
     </Filter>
+    <Filter Include="Resource">
+      <UniqueIdentifier>{7e42e92a-cb00-4244-81e7-e4d3226ad351}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="gccpch.h">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="A SHOT on Goal.cpp">
+    <ClCompile Include="Dunn_Perkins_SHOT_on_Goal_2018.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -22,5 +25,11 @@
     <ClInclude Include="hr_time.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="PS3_PPU_A SHOT on Goal.rc" />
+    <None Include="results.txt">
+      <Filter>Resource</Filter>
+    </None>
   </ItemGroup>
 </Project>

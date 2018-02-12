@@ -60,11 +60,15 @@
     </ClCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="A SHOT on Goal.cpp" />
+    <ClCompile Include="Dunn_Perkins_SHOT_on_Goal_2018.cpp" />
     <ClCompile Include="gccpch.h" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="hr_time.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="PS3_PPU_A SHOT on Goal.rc" />
+    <None Include="results.txt" />
   </ItemGroup>
   <Import Condition="'$(ConfigurationType)' == 'Makefile' and Exists('$(VCTargetsPath)\Platforms\$(Platform)\SCE.Makefile.$(Platform).targets')" Project="$(VCTargetsPath)\Platforms\$(Platform)\SCE.Makefile.$(Platform).targets" />
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
