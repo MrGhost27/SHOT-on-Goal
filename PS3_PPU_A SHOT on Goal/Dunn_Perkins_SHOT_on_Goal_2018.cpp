@@ -109,8 +109,9 @@ float flightPath[104 + 1][2];			// x,y coords (m,m) of ball flight. The sequence
 
 ///////////////////////////////////////////////////////
 
+const int TAN_TABLE_MAX = 11;
 // Lookup table for Tan values between 18 degrees and 23 degrees in 0.5 degree increments
-float tanTable[] = {
+float tanTable[TAN_TABLE_MAX] = {
 	0.32492,
 	0.334595,
 	0.344328,
@@ -124,21 +125,81 @@ float tanTable[] = {
 	0.424475
 };
 
+const int COS_TABLE_MAX = 11;
 // Lookup table for Cos values between 18 degrees and 23 degrees in 0.5 degree increments
-float cosTable[] = {
-	0.951057,
-	0.948324,
-	0.945519,
-	0.942641,
-	0.939693,
-	0.936672,
-	0.93358,
-	0.930418,
-	0.927184,
-	0.92388,
-	0.920505
+float cosTable[COS_TABLE_MAX] = {
+	1.80902,
+	1.79864,
+	1.78801,
+	1.77714,
+	1.76605,
+	1.75471,
+	1.74314,
+	1.73136,
+	1.71934,
+	1.70711,
+	1.69466
 };
 
+const int SPEED_TABLE_MAX = 55;
+
+float nextSpeedSqTable[SPEED_TABLE_MAX] = {
+	25		,
+	30.25	,
+	36		,
+	42.25	,
+	49		,
+	56.25	,
+	64		,
+	72.25	,
+	81		,
+	90.25	,
+	100		,
+	110.25	,
+	121		,
+	132.25	,
+	144		,
+	156.25	,
+	169		,
+	182.25	,
+	196		,
+	210.25	,
+	225		,
+	240.25	,
+	256		,
+	272.25	,
+	289		,
+	306.25	,
+	324		,
+	342.25	,
+	361		,
+	380.25	,
+	400		,
+	420.25	,
+	441		,
+	462.25	,
+	484		,
+	506.25	,
+	529		,
+	552.25	,
+	576		,
+	600.25	,
+	625		,
+	650.25	,
+	676		,
+	702.25	,
+	729		,
+	756.25	,
+	784		,
+	812.25	,
+	841		,
+	870.25	,
+	900		,
+	930.25	,
+	961		,
+	992.25	,
+	1024	
+};
 
 ///////////////////////////////////////////////////////
 
@@ -230,7 +291,7 @@ bool findSHOTonGoalSpeedAndAngle(float* speed, float* angle, float x)
 	float nextSpeed;
 	float nextAngle(minAngle);	// Start with shallowest angle...
 	float height;
-	int tableIndex(0);			// Used for the cos and tan lookup table
+	int angleTableIndex(0);			// Used for the cos and tan lookup table
 
 	bool foundCombo(false);		// Found combination of speed and angle that gets ball over bar?
 
@@ -241,6 +302,12 @@ bool findSHOTonGoalSpeedAndAngle(float* speed, float* angle, float x)
 		nextSpeed = minSpeed;									// reset minimum speed 
 		// This is a speed thing
 
+		/*
+		// Gravity Coefficient
+		//float gravityCoefficient= (-g * x*x);
+		*/
+
+		int speedTableIndex(0);		// Used for the calculating speed using lookup table as its faster!
 		while (!foundCombo && !(nextSpeed > maxSpeed))
 		{
 			// Figure out height of ball at goal post distance (x), using classic trajectory equation...
@@ -252,7 +319,7 @@ bool findSHOTonGoalSpeedAndAngle(float* speed, float* angle, float x)
 			// Note: Max horizontal distance can be calculated from = (speed^2) * sin(2*angle)/g
 #ifdef _PS3 
 			//height = ((-g * x*x) / (2.0F *cos(AngleRads) *cos(AngleRads) * (nextSpeed*nextSpeed))) + (x *tan(AngleRads));	//Phew!
-			height = ((-g * x*x) / (2.0F * cosTable[tableIndex] * cosTable[tableIndex] * (nextSpeed*nextSpeed))) + (x * tanTable[tableIndex]);	//Phew!
+			height = ((-g * x*x) / (cosTable[angleTableIndex] * nextSpeedSqTable[speedTableIndex])) + (x * tanTable[angleTableIndex]);	//Phew!
 #else
 			// Constants - Putting them into specified regsiters?
 			// AngleRads in F5
@@ -321,9 +388,12 @@ bool findSHOTonGoalSpeedAndAngle(float* speed, float* angle, float x)
 				*angle = nextAngle;
 				foundCombo = true;			// ... and stop looking.
 			}
-			else nextSpeed += deltaD;		// Otherwise try next speed up (+0.5 m/s).
+			else {
+				speedTableIndex++;
+				nextSpeed += deltaD;		// Otherwise try next speed up (+0.5 m/s).
+			}
 		}
-		tableIndex++;
+		angleTableIndex++;
 		nextAngle += deltaD;	// no joy, try next angle up (+0.5 degrees).
 	}
 	return (foundCombo);
