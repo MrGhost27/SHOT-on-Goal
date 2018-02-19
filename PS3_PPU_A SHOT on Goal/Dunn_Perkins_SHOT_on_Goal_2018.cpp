@@ -65,7 +65,7 @@ long long SpeedAndAngleTime(1000000);	// Set high intially.
 long long GenerateFlightPathTime(1000000);
 
 // Some constants
-const float g(9.81F);					// (m/s/s) gravity
+float g(9.81F);					// (m/s/s) gravity
 const float Pi(3.14159265358979323846F);// This value stolen from M_PI defines in Math.h) - used to convert degrees to radians
 const float dataEnd = -1.0F;			// End of data marker
 const int x = 0;						// coordinate system
@@ -144,61 +144,61 @@ float cosTable[COS_TABLE_MAX] = {
 const int SPEED_TABLE_MAX = 55;
 
 float nextSpeedSqTable[SPEED_TABLE_MAX] = {
-	25		,
-	30.25	,
-	36		,
-	42.25	,
-	49		,
-	56.25	,
-	64		,
-	72.25	,
-	81		,
-	90.25	,
-	100		,
-	110.25	,
-	121		,
-	132.25	,
-	144		,
-	156.25	,
-	169		,
-	182.25	,
-	196		,
-	210.25	,
-	225		,
-	240.25	,
-	256		,
-	272.25	,
-	289		,
-	306.25	,
-	324		,
-	342.25	,
-	361		,
-	380.25	,
-	400		,
-	420.25	,
-	441		,
-	462.25	,
-	484		,
-	506.25	,
-	529		,
-	552.25	,
-	576		,
-	600.25	,
-	625		,
-	650.25	,
-	676		,
-	702.25	,
-	729		,
-	756.25	,
-	784		,
-	812.25	,
-	841		,
-	870.25	,
-	900		,
-	930.25	,
-	961		,
-	992.25	,
-	1024	
+	25,
+	30.25,
+	36,
+	42.25,
+	49,
+	56.25,
+	64,
+	72.25,
+	81,
+	90.25,
+	100,
+	110.25,
+	121,
+	132.25,
+	144,
+	156.25,
+	169,
+	182.25,
+	196,
+	210.25,
+	225,
+	240.25,
+	256,
+	272.25,
+	289,
+	306.25,
+	324,
+	342.25,
+	361,
+	380.25,
+	400,
+	420.25,
+	441,
+	462.25,
+	484,
+	506.25,
+	529,
+	552.25,
+	576,
+	600.25,
+	625,
+	650.25,
+	676,
+	702.25,
+	729,
+	756.25,
+	784,
+	812.25,
+	841,
+	870.25,
+	900,
+	930.25,
+	961,
+	992.25,
+	1024
 };
 
 ///////////////////////////////////////////////////////
@@ -317,64 +317,31 @@ bool findSHOTonGoalSpeedAndAngle(float* speed, float* angle, float x)
 			// If this is > cross bar height (plus any margin allowed) then result! 
 			// Note: height could become negative if ball hits ground short of posts (and theoretically keeps going underground!).
 			// Note: Max horizontal distance can be calculated from = (speed^2) * sin(2*angle)/g
-#ifdef _PS3 
+#ifndef _PS3 
 			//height = ((-g * x*x) / (2.0F *cos(AngleRads) *cos(AngleRads) * (nextSpeed*nextSpeed))) + (x *tan(AngleRads));	//Phew!
 			height = ((-g * x*x) / (cosTable[angleTableIndex] * nextSpeedSqTable[speedTableIndex])) + (x * tanTable[angleTableIndex]);	//Phew!
 #else
-			// Constants - Putting them into specified regsiters?
-			// AngleRads in F5
-			// nextSpeed in F6
-			// Gravity (g) in F7 0x9.81
+			// AA VALUE IS STORED IN FR6
 
-			float newgravity = g;
+			float gravity = g;
 
 			asm volatile(
-
-				"lfs 5, %[AngleRads]                      \n"
-				"lfs 6, %[nextSpeed]                      \n"
-				"lfs 7, %[g]                      \n"
+				"  lwz 4,%[speedTableIndex]                    \n"	// store speed counter in r4
+				"  lwz 5,%[angleTableIndex]                    \n"  // store angle counter in r5
+				"  la  6,%[tanTable]                           \n"  // store tanTable address in r6
+				"  la  7,%[cosTable]                           \n"	// store cosTable address in r7
+				"  lfs 4,%[g]								   \n"	// store gravity in fr4
+				/////////////////////////////////////////////////////////////////////////////////////////////////
+				"  lfs 5, 5(6)                   \n"
 				"                      \n"
 				"                      \n"
-				"                      \n"
-				"                      \n"
-
-				/*
-				00011AB4 8122829C lwz        r9,-0x7D64(r2)                 PIPE
-				00011AB8 C0090000 lfs        f0,0x0(r9)                    03 (00011AB4) REG LSU
-				00011ABC FDA00050 fneg       f13,f0                         PIPE
-				00011AC0 C01F0110 lfs        f0,0x110(r31)
-				00011AC4 EDAD0032 fmuls      f13,f13,f0                    08 (00011ABC) REG PIPE
-				00011AC8 C01F0110 lfs        f0,0x110(r31)
-				00011ACC EFCD0032 fmuls      f30,f13,f0                    08 (00011AC4) REG PIPE
-				00011AD0 C03F0070 lfs        f1,0x70(r31)
-				00011AD4 4803A541 bl         std::cos(float)               08
-				00011AD8 60000000 nop
-				00011ADC FC000890 fmr        f0,f1
-				00011AE0 EFE0002A fadds      f31,f0,f0                     09 (00011ADC) REG
-				00011AE4 C03F0070 lfs        f1,0x70(r31)
-				00011AE8 4803A52D bl         std::cos(float)               08
-				00011AEC 60000000 nop                                       PIPE
-				00011AF0 FC000890 fmr        f0,f1
-				00011AF4 ED9F0032 fmuls      f12,f31,f0                    09 (00011AF0) REG PIPE
-				00011AF8 C1BF0080 lfs        f13,0x80(r31)
-				00011AFC C01F0080 lfs        f0,0x80(r31)                   PIPE
-				00011B00 EC0D0032 fmuls      f0,f13,f0
-				00011B04 EC0C0032 fmuls      f0,f12,f0                     09 (00011B00) REG PIPE
-				00011B08 EFFE0024 fdivs      f31,f30,f0                    56+09 (00011B04) REG
-				00011B0C C03F0070 lfs        f1,0x70(r31)                   PIPE
-				00011B10 4803A54D bl         std::tan(float)               08
-				00011B14 60000000 nop                                       PIPE
-				00011B18 FDA00890 fmr        f13,f1
-				00011B1C C01F0110 lfs        f0,0x110(r31)
-				00011B20 EC0D0032 fmuls      f0,f13,f0                     09 (00011B18) REG
-				00011B24 EC1F002A fadds      f0,f31,f0                     09 (00011B20) REG PIPE
-				00011B28 D01F0078 stfs       f0,0x78(r31)                  09 (00011B24) REG
-				*/
 				:		// Output
-			:	[AngleRads] "m" (AngleRads),	// Input
-				[nextSpeed] "m" (nextSpeed),
-				[g] "m" (newgravity)
-				:	"fr5", "fr6", "fr7"		// Clobber List
+			: [tanTable] "m" (tanTable[0]),	// Input
+				[cosTable] "m" (cosTable[0]),
+				[speedTableIndex] "m" (speedTableIndex),
+				[angleTableIndex] "m" (angleTableIndex),
+				[g] "m" (gravity)
+				: "r4", "r5", "r6", "r7", "fr4", "fr5"		// Clobber List
 				);
 #endif
 
