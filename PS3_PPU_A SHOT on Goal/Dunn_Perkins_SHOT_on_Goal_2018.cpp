@@ -293,6 +293,8 @@ bool findSHOTonGoalSpeedAndAngle(float* speed, float* angle, float x)
 	float height;
 	int angleTableIndex(0);			// Used for the cos and tan lookup table
 
+	float outputMe(0);
+
 	bool foundCombo(false);		// Found combination of speed and angle that gets ball over bar?
 
 	while (!foundCombo && !(nextAngle > maxAngle))				// Think de Morgan's Theory, perhaps.
@@ -304,9 +306,10 @@ bool findSHOTonGoalSpeedAndAngle(float* speed, float* angle, float x)
 
 		/*
 		// Gravity Coefficient
-		//float gravityCoefficient= (-g * x*x);
 		*/
-
+		float gravityCoefficient = (-g * x*x);
+		
+		
 		int speedTableIndex(0);		// Used for the calculating speed using lookup table as its faster!
 		while (!foundCombo && !(nextSpeed > maxSpeed))
 		{
@@ -317,14 +320,63 @@ bool findSHOTonGoalSpeedAndAngle(float* speed, float* angle, float x)
 			// If this is > cross bar height (plus any margin allowed) then result! 
 			// Note: height could become negative if ball hits ground short of posts (and theoretically keeps going underground!).
 			// Note: Max horizontal distance can be calculated from = (speed^2) * sin(2*angle)/g
-#ifndef _PS3 
+
 			//height = ((-g * x*x) / (2.0F *cos(AngleRads) *cos(AngleRads) * (nextSpeed*nextSpeed))) + (x *tan(AngleRads));	//Phew!
-			height = ((-g * x*x) / (cosTable[angleTableIndex] * nextSpeedSqTable[speedTableIndex])) + (x * tanTable[angleTableIndex]);	//Phew!
-#else
+			height = ((gravityCoefficient) / (cosTable[angleTableIndex] * nextSpeedSqTable[speedTableIndex])) + (x * tanTable[angleTableIndex]);	//Phew!
+
+
+			/*Registers
+			 4 speed iterator (Not Required)
+			 5 angle iterator (Not Required - we'll iterate the addresses as we load the values).
+			 6 speed table address Not Requried - don't need a table for speeds.
+			 7 tan table address
+			 8 cos table address
+			 9 Output address
+
+			 Floats;
+			 f4 Gravity coefficient
+			 f5 speed value
+			 f6 speed value squared
+			 f7 tan^2 value
+			 f8 cos ^2 angle
+
+			 f9 output answer
+
+			 */
+
+			asm volatile(
+				"  lwz 4,%[speedTableIndex]						\n"	// store speed counter in r4 - Iterator for Speed table
+				"  lwz 5,%[angleTableIndex]						\n" // store angle counter in r5 - Iterator for BOTH angle tables.
+				"  la  6,%[speedTable]                          \n" // store tanTable address in r6 (Address is Integer)
+				"  la  7,%[tanTable]							\n"	// store cosTable address in r7 (Address is Integer)
+				"  la  8,%[cosTable]							\n"	// store cosTable address in r8 (Address is Integer)
+				"  la  9,%[output]							\n"	// store output address in r9 (Address is Integer)
+				"  lfs 4,%[g]									\n"	// store gravity in fr4
+				/////////////////////////////////////////////////////////////////////////////////////////////////
+				"  li  5, 0x5							\n" // Initialise the Speed value to 5//Load from the Speed Value in 6 (Speed Table Address) and UPDATE it, to be 4 larger.
+				"  fmul 6, 5, 5							\n" // Initialise Speed Squared.
+				"  lfsu 7, 0x4(%%r7)                    \n" // Load the tan table value, and increment the address by 4 for the next float.
+				"  lfsu 8, 0x4(%%r8)                    \n" // load the cos table value, and increment the address by 4 for the next float.
+
+				"  fadd 9, 7, 8		                    \n" // load the cos table value, and increment the address by 4 for the next float.
+				"  stfs 9, 0(9)		                    \n" // load the cos table value, and increment the address by 4 for the next float.
+
+			:	[output] "=m" (outputMe)					// Output
+			:	[tanTable] "m" (tanTable[0]),				// Input
+				[cosTable] "m" (cosTable[0]),
+				[speedTable] "m" (nextSpeedSqTable[0]),
+				[speedTableIndex] "m" (speedTableIndex),
+				[angleTableIndex] "m" (angleTableIndex),
+				[g] "m" (gravityCoefficient)
+				: "4", "5", "6", "7", "8", "9", "fr4", "fr5", "fr6", "fr7", "fr8", "fr9"		// Clobber List
+				);
+			
+
+//#else
 			// AA VALUE IS STORED IN FR6
 
-			float gravity = g;
-
+			//float gravity = g;
+			/*
 			asm volatile(
 				"  lwz 4,%[speedTableIndex]                    \n"	// store speed counter in r4
 				"  lwz 5,%[angleTableIndex]                    \n"  // store angle counter in r5
@@ -343,7 +395,8 @@ bool findSHOTonGoalSpeedAndAngle(float* speed, float* angle, float x)
 				[g] "m" (gravity)
 				: "r4", "r5", "r6", "r7", "fr4", "fr5"		// Clobber List
 				);
-#endif
+			*/
+			// #endif
 
 #ifdef _longTrace  // Echo results to screen as calculations proceed (can be lengthy, be patient! Very patient.)
 			cout << setw(4) << setprecision(4) << "\nHeight found for speed " << nextSpeed << "m/s\t\t= " << height << " m,\t\tkicking at angle " << nextAngle << " degrees";
@@ -363,6 +416,7 @@ bool findSHOTonGoalSpeedAndAngle(float* speed, float* angle, float x)
 		angleTableIndex++;
 		nextAngle += deltaD;	// no joy, try next angle up (+0.5 degrees).
 	}
+	//cout << outputMe; THIS WILL OUTPUT IT 100,000 TIMES YOU BERK!
 	return (foundCombo);
 }
 
